@@ -81,6 +81,19 @@ server <- function(input, output, session)
       ))
     ))
   )
+  
+  observeEvent(input$anonymize, {
+    checkedData <- map(vars(), ~ input[[paste(.x, "Checked")]])
+    selectedData <- map(vars(), ~ input[[paste(.x, "Selected")]])
+    
+    for (i in 1:length(checkedData))
+    {
+      if (checkedData[i] == TRUE)
+      {
+        print(selectedData[i])
+      }
+    }
+  })
 }
 
 # Run the application
