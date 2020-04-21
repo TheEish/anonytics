@@ -1,7 +1,8 @@
 library(shiny)
 library(tools)
 library(purrr)
-library(readxl)
+library(openxlsx)
+library(zip)
 library(shinyalert)
 
 datasetData <- c()
@@ -42,10 +43,10 @@ displayTemplate <- function(input, output, session, vars)
         }
         
         output$inputContents <- renderUI(
-          map(vars(), ~ fluidRow(
+          map(vars(), ~ fluidRow(column(width = 8,
             checkboxInput(paste(.x, "Checked"), .x, value = checkedVar[.x]),
             selectInput(paste(.x, "Selected"), "Dataset:", datasetTypes, selected = selectedVar[.x])
-          ))
+          )))
         )
       }, error = function(e)
       {
@@ -86,6 +87,10 @@ ui <- fluidPage(
     column(width = 8,
       checkboxInput("includeOriginal", "Include Original File", FALSE),
       checkboxInput("includeKeyFile", "Include Key File", FALSE),
+      #fluidRow(column(width = 8,
+      #  checkboxInput("includePassword", "Include Password", FALSE),
+      #  textInput("password", NULL, "Enter a Password")
+      #)),
       actionButton("anonymize", "Anonymize Data File")
     )
   )
@@ -113,7 +118,7 @@ server <- function(input, output, session)
     tryCatch({
       if (tolower(file_ext(inputFile$datapath)) == "xlsx")
       {
-        read.xlsx(inputFile$datapath, stringsAsFactors=FALSE)
+        read.xlsx(inputFile$datapath)
       }
       else if (tolower(file_ext(inputFile$datapath)) == "csv")
       {
@@ -132,10 +137,10 @@ server <- function(input, output, session)
   vars <- reactive(colnames(data()))
   
   output$inputContents <- renderUI(
-    map(vars(), ~ fluidRow(
+    map(vars(), ~ fluidRow(column(width = 8,
       checkboxInput(paste(.x, "Checked"), .x, TRUE),
       selectInput(paste(.x, "Selected"), "Dataset:", datasetTypes)
-    ))
+    )))
   )
   
   observeEvent(input$template, {
@@ -145,6 +150,10 @@ server <- function(input, output, session)
   observeEvent(input$anonymize, {
     originalData <- data.frame(data())
     newData <- data.frame(data())
+    
+    anonymizedTypes <- c()
+    anonymizedDatasets <- c()
+    
     for (i in 1:length(vars()))
     {
       columnName <- vars()[i]
@@ -152,6 +161,9 @@ server <- function(input, output, session)
       {
         dataset <- input[[paste(columnName, "Selected")]]
         dataFromDataset <- datasetData[[dataset]]
+        
+        anonymizedTypes <- append(anonymizedTypes, columnName)
+        anonymizedDatasets <- append(anonymizedDatasets, dataset)
         
         numberOfRows <- length(data()[, i])
         datasetLength <- length(dataFromDataset)
@@ -174,13 +186,25 @@ server <- function(input, output, session)
     
     if (input$includeKeyFile == TRUE)
     {
-      
+      keyData <- data.frame(
+        "Column Names" = anonymizedTypes,
+        "Datasets" = anonymizedDatasets
+      )
+      write.csv(keyData, "key.csv", row.names=FALSE)
+      dataFiles <- append(dataFiles, "key.csv")
     }
     
     write.csv(newData, "data.csv", row.names=FALSE)
     dataFiles <- append(dataFiles, "data.csv")
     
-    zip("result.zip", files=dataFiles)
+    #if (input$includePassword == TRUE && input$password != "")
+    #{
+    #  zipr("anonymizedFile.zip", files=dataFiles, flags=paste("--password", input$password))
+    #}
+    #else
+    #{
+      zipr("anonymizedFile.zip", files=dataFiles)
+    #}
     unlink(dataFiles)
   })
   
