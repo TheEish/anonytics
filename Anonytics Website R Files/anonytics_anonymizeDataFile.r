@@ -20,38 +20,36 @@ displayTemplate <- function(input, output, session, vars)
   {
     if (templateType != "" && templateType != "None")
     {
-      templateData <- read.csv(paste(templatesDir, templateType, ".csv", sep=""))
-      
-      checkedVar <- c()
-      selectedVar <- c()
-      
-      for (i in 1:length(vars()))
-      {
-        columnName <- vars()[i]
-        if (columnName %in% templateData[, 1])
-        {
-          checkedVar[columnName] <- TRUE
-          selectedVar[columnName] <- paste(templateData[grep(columnName, templateData[, 1]), 2])
-        }
-        else
-        {
-          checkedVar[columnName] <- FALSE
-          selectedVar[columnName] <- input[[paste(columnName, "Selected")]]
-        }
-      }
-      
-      output$inputContents <- renderUI(
-        map(vars(), ~ fluidRow(
-          checkboxInput(paste(.x, "Checked"), .x, value = checkedVar[.x]),
-          selectInput(paste(.x, "Selected"), "Dataset:", datasetTypes, selected = selectedVar[.x])
-        ))
-      )
-      
       tryCatch({
+        templateData <- read.csv(paste(templatesDir, templateType, ".csv", sep=""))
         
+        checkedVar <- c()
+        selectedVar <- c()
+        
+        for (i in 1:length(vars()))
+        {
+          columnName <- vars()[i]
+          if (columnName %in% templateData[, 1])
+          {
+            checkedVar[columnName] <- TRUE
+            selectedVar[columnName] <- paste(templateData[grep(columnName, templateData[, 1]), 2])
+          }
+          else
+          {
+            checkedVar[columnName] <- FALSE
+            selectedVar[columnName] <- input[[paste(columnName, "Selected")]]
+          }
+        }
+        
+        output$inputContents <- renderUI(
+          map(vars(), ~ fluidRow(
+            checkboxInput(paste(.x, "Checked"), .x, value = checkedVar[.x]),
+            selectInput(paste(.x, "Selected"), "Dataset:", datasetTypes, selected = selectedVar[.x])
+          ))
+        )
       }, error = function(e)
       {
-        shinyalert("Error", "An error occurred during template load.", type = "error")
+        shinyalert("Error", paste("An error occurred during template load: ", e), type = "error")
       })
     }
   }
@@ -86,7 +84,8 @@ ui <- fluidPage(
   
   fluidRow(
     column(width = 8,
-      checkboxInput("include", "Include Original File", FALSE),
+      checkboxInput("includeOriginal", "Include Original File", FALSE),
+      checkboxInput("includeKeyFile", "Include Key File", FALSE),
       actionButton("anonymize", "Anonymize Data File")
     )
   )
@@ -126,7 +125,7 @@ server <- function(input, output, session)
       }
     }, error = function(e)
     {
-      shinyalert("Error", "An error occurred during file upload.", type = "error")
+      shinyalert("Error", paste("An error occurred during file upload: ", e), type = "error")
     })
   })
   
@@ -144,6 +143,7 @@ server <- function(input, output, session)
   })
   
   observeEvent(input$anonymize, {
+    originalData <- data.frame(data())
     newData <- data.frame(data())
     for (i in 1:length(vars()))
     {
@@ -163,7 +163,25 @@ server <- function(input, output, session)
         }
       }
     }
-    write.csv(newData, "test.csv", row.names=FALSE)
+    
+    dataFiles <- c()
+    
+    if (input$includeOriginal == TRUE)
+    {
+      write.csv(originalData, "originalData.csv", row.names=FALSE)
+      dataFiles <- append(dataFiles, "originalData.csv")
+    }
+    
+    if (input$includeKeyFile == TRUE)
+    {
+      
+    }
+    
+    write.csv(newData, "data.csv", row.names=FALSE)
+    dataFiles <- append(dataFiles, "data.csv")
+    
+    zip("result.zip", files=dataFiles)
+    unlink(dataFiles)
   })
   
   observeEvent(input$runTemplateSave, {
@@ -176,7 +194,7 @@ server <- function(input, output, session)
       if (input[[paste(name, "Checked")]] == TRUE)
       {
         columnNames <- c(columnNames, name)
-        columnDatasets <- c(columnDatasets, input[[paste(name,"Selected")]])
+        columnDatasets <- c(colummnDatasets, input[[paste(name,"Selected")]])
       }
     }
     
